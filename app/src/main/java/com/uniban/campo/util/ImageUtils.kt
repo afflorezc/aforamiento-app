@@ -77,6 +77,8 @@ object ImageUtils {
             BitmapFactory.Options().apply {
                 this.inSampleSize = inSampleSize
                 inPreferredConfig = Bitmap.Config.RGB_565
+                // Devuelve un bitmap mutable para poder dibujar las bbox sobre él
+                inMutable = true
             }
         )
     } catch (e: OutOfMemoryError) {

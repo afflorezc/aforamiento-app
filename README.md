@@ -15,11 +15,15 @@ tarjetas blancas con bordes `#D8E5D9`, esquinas de 12–16 dp y tipografía Outf
   estimar (no puede superar el `area_ha` de la parcela) y carga de imagen
   (jpg, jpeg, png, tif, tiff, bmp).
 - **Modelo YOLO (TFLite)** entrenado a 864×864 px:
-  - Imágenes pequeñas: se reescalan con letterbox y se infiere una vez.
-  - Ortomosaicos con lado mayor a 8000 px: se **particionan en tiles** de 2048 px con
+  - Imágenes pequeñas (lado ≤ 2560 px, ver `YoloConfig.TILE_THRESHOLD_PX`): se
+    reescalan con letterbox y se infiere una vez.
+  - Imágenes con lado mayor a 2560 px (incluye los ortomosaicos de más de 8000 px
+    del enunciado): se **particionan en tiles** de 2048 px con
     15 % de superposición; las detecciones se trasladan a coordenadas globales y se
     **eliminan los duplicados en las intersecciones** (NMS global por clase + distancia
     entre centros). El total = suma de detecciones de plátano y banano.
+    El tiling temprano conserva la escala de las plantas: con un único reescalado a
+    864 px las coronas de una parcela mediana quedarían en ~10 px y el modelo las ignora.
 - **Imagen de salida** con las mismas dimensiones que la original, con las bbox YOLO
   dibujadas y etiquetadas. Imagen de entrada y de salida se guardan en
   `filesDir/estimations/`.
@@ -62,11 +66,15 @@ tarjetas blancas con bordes `#D8E5D9`, esquinas de 12–16 dp y tipografía Outf
 
 ## Notas de implementación
 
-- **Tiling**: para imágenes > 8000 px se crean tiles de 2048 px con 15 %
-  de solapamiento; cada tile se letterbox-a 864 px, se infiere y las cajas se
-  trasladan con el offset del tile; el merge final usa NMS (IoU 0.40) y distancia
-  entre centros (25 % del lado menor de la caja) para no contar dos veces la misma
-  planta en la zona de intersección de dos tiles.
+- **Tiling**: para imágenes con lado mayor a `TILE_THRESHOLD_PX` (2560 px) se crean
+  tiles de 2048 px con 15 % de solapamiento; cada tile se letterbox-a 864 px, se
+  infiere y las cajas se trasladan con el offset del tile; el merge final usa NMS
+  (IoU 0.40) y distancia entre centros (25 % del lado menor de la caja) para no
+  contar dos veces la misma planta en la zona de intersección de dos tiles.
+  El umbral de confianza por defecto es 0.15 (`YoloConfig.CONF_THRESHOLD`).
+- **Bitmaps**: la imagen de entrada se decodifica con `inMutable = true` (y con un
+  respaldo por `copy`) porque `Canvas` lanza "Immutable bitmap passed to Canvas
+  constructor" sobre bitmaps de `BitmapFactory`.
 - **TIFF**: Android no decodifica TIFF nativamente; se incluye un decodificador puro
   en Kotlin (`util/tiff/TiffDecoder.kt`) que soporta tiras o teselas, compresión
   ninguna/LZW/Deflate/PackBits, 8/16 bits, grises/RGB/paleta.

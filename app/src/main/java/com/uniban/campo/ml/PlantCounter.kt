@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.net.Uri
+import android.util.Log
 import com.uniban.campo.util.ImageUtils
 import java.io.File
 import kotlin.math.max
@@ -36,7 +37,13 @@ data class EstimationResult(
  */
 class PlantCounter(private val context: Context) {
 
+    private val tag = "PlantCounter"
     private var detector: YoloTfliteDetector? = null
+
+    private fun report(onProgress: (EstimationProgress) -> Unit, stage: String, fraction: Float?) {
+        Log.d(tag, "[$fraction] $stage")
+        onProgress(EstimationProgress(stage, fraction))
+    }
 
     private fun getDetector(): YoloTfliteDetector =
         detector ?: YoloTfliteDetector.create(context).also { detector = it }
@@ -55,10 +62,10 @@ class PlantCounter(private val context: Context) {
         val det = getDetector()
         val imagesDir = File(context.filesDir, "estimations").apply { mkdirs() }
 
-        onProgress(EstimationProgress("Copiando imagen de entrada…", 0.05f))
+        report(onProgress, "Copiando imagen de entrada…", 0.05f)
         val inputFile = ImageUtils.copyUriToDir(context, sourceUri, imagesDir, baseName = estimationId)
 
-        onProgress(EstimationProgress("Decodificando imagen…", 0.10f))
+        report(onProgress, "Decodificando imagen…", 0.10f)
         val bitmap = try {
             ImageUtils.decodeFullImage(inputFile)
         } catch (e: OutOfMemoryError) {
@@ -86,11 +93,10 @@ class PlantCounter(private val context: Context) {
                 tilesUsed = tiles.size
                 val all = ArrayList<Detection>(tiles.size * 64)
                 tiles.forEachIndexed { index, tile ->
-                    onProgress(
-                        EstimationProgress(
-                            "Procesando tile ${index + 1} de ${tiles.size}…",
-                            0.15f + 0.65f * index / tiles.size
-                        )
+                    report(
+                        onProgress,
+                        "Procesando tile ${index + 1} de ${tiles.size}…",
+                        0.15f + 0.65f * index / tiles.size
                     )
                     val cropped = Bitmap.createBitmap(bitmap, tile.x, tile.y, tile.w, tile.h)
                     val (letterboxed, meta) = Letterbox.apply(cropped)
@@ -111,24 +117,31 @@ class PlantCounter(private val context: Context) {
                     if (cropped !== bitmap) cropped.recycle()
                     letterboxed.recycle()
                 }
-                onProgress(EstimationProgress("Fusionando detecciones…", 0.82f))
+                report(onProgress, "Fusionando detecciones…", 0.82f)
                 finalDetections = Nms.mergeTileDetections(all)
                     .map { clamp(it, width, height) }
                     .filter { it.width > 1f && it.height > 1f }
+                Log.d(tag, "Tiles=${tiles.size}, detecciones crudas=${all.size}, tras merge=${finalDetections.size}")
             } else {
                 tilesUsed = 1
-                onProgress(EstimationProgress("Detectando plantas…", 0.40f))
+                report(onProgress, "Detectando plantas…", 0.40f)
                 val (letterboxed, meta) = Letterbox.apply(bitmap)
                 val tileDets = det.detect(letterboxed)
                 letterboxed.recycle()
-                onProgress(EstimationProgress("Fusionando detecciones…", 0.70f))
-                finalDetections = Nms.nms(tileDets, YoloConfig.IOU_THRESHOLD)
+                Log.d(
+                    tag,
+                    "Detecciones del modelo=$tileDets.size; letterbox scale=${meta.scale} pad=(${meta.padX},${meta.padY})"
+                )
+                report(onProgress, "Fusionando detecciones…", 0.70f)
+                val mapped = Nms.nms(tileDets, YoloConfig.IOU_THRESHOLD)
                     .map { d ->
-                        val mapped = meta.toOriginal(d.x1, d.y1, d.x2, d.y2)
-                        Detection(mapped[0], mapped[1], mapped[2], mapped[3], d.classId, d.score)
+                        val coords = meta.toOriginal(d.x1, d.y1, d.x2, d.y2)
+                        Detection(coords[0], coords[1], coords[2], coords[3], d.classId, d.score)
                     }
+                finalDetections = mapped
                     .map { clamp(it, width, height) }
                     .filter { it.width > 1f && it.height > 1f }
+                Log.d(tag, "Tras mapeo=${mapped.size}, tras filtro de tamaño=${finalDetections.size}")
             }
 
             val platanoCount = finalDetections.count { it.classId == 0 }
@@ -139,13 +152,24 @@ class PlantCounter(private val context: Context) {
                 finalDetections.map { it.score }.average().toFloat()
             }
 
-            onProgress(EstimationProgress("Generando imagen de salida…", 0.90f))
+            report(onProgress, "Generando imagen de salida…", 0.90f)
             val outputFile = File(imagesDir, "${estimationId}_output.jpg")
-            drawDetections(bitmap, finalDetections)
-            ImageUtils.saveJpeg(bitmap, outputFile)
-            bitmap.recycle()
+            // BitmapFactory puede entregar bitmaps inmutables; Canvas exige uno mutable.
+            val drawable = ensureMutable(bitmap)
+            try {
+                drawDetections(drawable, finalDetections)
+                ImageUtils.saveJpeg(drawable, outputFile)
+            } finally {
+                drawable.recycle()
+            }
 
-            onProgress(EstimationProgress("Guardando resultados…", 1.0f))
+            Log.i(
+                tag,
+                "Estimación $estimationId: total=${platanoCount + bananoCount} " +
+                    "(plátano=$platanoCount, banano=$bananoCount), confianza=${"%.2f".format(avgConfidence)}, " +
+                    "tiles=$tilesUsed, imagen=${width}x$height"
+            )
+            report(onProgress, "Guardando resultados…", 1.0f)
             return EstimationResult(
                 totalPlants = platanoCount + bananoCount,
                 platanoCount = platanoCount,
@@ -163,6 +187,14 @@ class PlantCounter(private val context: Context) {
             inputFile.delete()
             throw e
         }
+    }
+
+    private fun ensureMutable(source: Bitmap): Bitmap {
+        if (source.isMutable) return source
+        val copy = source.copy(Bitmap.Config.RGB_565, true)
+            ?: throw IllegalStateException("No se pudo preparar la imagen de salida (bitmap inmutable)")
+        source.recycle()
+        return copy
     }
 
     private data class Tile(val x: Int, val y: Int, val w: Int, val h: Int)

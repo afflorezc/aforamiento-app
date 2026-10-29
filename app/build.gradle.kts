@@ -54,6 +54,11 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    androidResources {
+        // Evita que el .tflite quede comprimido en el APK (rompe la carga por mmap)
+        noCompress.add("tflite")
+    }
 }
 
 dependencies {
@@ -85,8 +90,8 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
-
+    // LiteRT (sucesor de TensorFlow Lite; conserva los paquetes org.tensorflow.lite.*)
+    implementation("com.google.ai.edge.litert:litert:1.4.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

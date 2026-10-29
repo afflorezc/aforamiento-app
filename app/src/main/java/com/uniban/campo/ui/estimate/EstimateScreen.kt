@@ -57,6 +57,7 @@ import com.uniban.campo.ui.components.ImagePreviewDialog
 import com.uniban.campo.ui.components.InfoBanner
 import com.uniban.campo.ui.components.LabeledTextField
 import com.uniban.campo.ui.components.PrimaryButton
+import com.uniban.campo.ui.components.ProcessingDialog
 import com.uniban.campo.ui.components.SecondaryButton
 import com.uniban.campo.ui.components.SectionLabel
 import com.uniban.campo.ui.components.StatusChip
@@ -271,7 +272,8 @@ fun EstimateScreen(viewModel: EstimateViewModel) {
                             )
                             ui.imageSizePx?.let { (w, h) ->
                                 Text(
-                                    text = "${w} × ${h} px" + if (maxOf(w, h) > 8000) " · se procesará por tiles" else "",
+                                    text = "${w} × ${h} px" +
+                                        if (maxOf(w, h) > com.uniban.campo.ml.YoloConfig.TILE_THRESHOLD_PX) " · se procesará por tiles" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary
                                 )
@@ -294,20 +296,10 @@ fun EstimateScreen(viewModel: EstimateViewModel) {
         )
 
         if (ui.running) {
-            AppCard {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    LinearProgressIndicator(
-                        progress = { ui.progress?.fraction ?: 0f },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = ui.progress?.stage ?: "Procesando…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                }
-            }
+            ProcessingDialog(
+                stage = ui.progress?.stage ?: "Procesando…",
+                fraction = ui.progress?.fraction
+            )
         }
 
         ui.result?.let { result ->
@@ -334,6 +326,15 @@ fun EstimateScreen(viewModel: EstimateViewModel) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
+
+                    if (result.totalPlants == 0) {
+                        Spacer(Modifier.height(10.dp))
+                        InfoBanner(
+                            type = BannerType.WARNING,
+                            text = "No se detectaron plantas. Verifique que el modelo corresponde a la parcela fotografiada, " +
+                                "que la imagen es un nadir nítido y revise el logcat (etiquetas YoloDetector / PlantCounter) para ver los puntajes crudos."
+                        )
+                    }
 
                     Spacer(Modifier.height(14.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

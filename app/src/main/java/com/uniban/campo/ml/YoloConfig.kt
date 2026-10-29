@@ -8,18 +8,25 @@ object YoloConfig {
     const val NUM_CLASSES = 2
     val CLASS_NAMES = listOf("platano", "banano")
 
-    const val CONF_THRESHOLD = 0.25f
-    const val IOU_THRESHOLD = 0.45f
+    /**
+     * Umbral de confianza. 0.15 prioriza recall (conteo de plantas);
+     * baje a 0.10 si el logcat muestra maxScore entre 0.10 y 0.15.
+     */
+    const val CONF_THRESHOLD = 0.15f
+    const val IOU_THRESHOLD = 0.30f
 
     /** Nombre del archivo del modelo dentro de assets/models/ o filesDir/models/. */
     const val MODEL_FILE_NAME = "model.tflite"
     const val MODELS_DIR = "models"
 
     /**
-     * Si el lado mayor de la imagen supera este valor (ortomosaicos),
-     * se particiona en tiles con superposición.
+     * Lado mayor a partir del cual se particiona en tiles con superposición.
+     * Con un solo reescalado a 864 px las plantas de ortomosaicos medianos
+     * (2560-8000 px) quedan en pocos píxeles y el modelo las ignora; tiling
+     * antes conserva la escala de las plantas. Las imágenes de más de
+     * 8000 px (el caso del enunciado) se parten siempre por estar por encima.
      */
-    const val TILE_THRESHOLD_PX = 8000
+    const val TILE_THRESHOLD_PX = 2560
 
     /** Tamaño de cada tile y fracción de superposición entre tiles. */
     const val TILE_SIZE = 2048
