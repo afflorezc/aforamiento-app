@@ -4,6 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.content.Context
+import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
 
 data class LetterboxMeta(
     val scale: Float,
@@ -20,6 +24,7 @@ data class LetterboxMeta(
         val oy2 = (y2 - padY) / scale
         return floatArrayOf(ox1, oy1, ox2, oy2)
     }
+
 }
 
 object Letterbox {
@@ -46,5 +51,18 @@ object Letterbox {
         )
 
         return out to LetterboxMeta(scale, padX, padY, size, size)
+    }
+    /** Guarda la imagen preprocesada antes de ingresar al modelo */
+    fun saveBitmap(context: Context, bitmap: Bitmap, filename: String) {
+        val dir = File(context.filesDir, "debug")
+        dir.mkdirs()
+
+        val file = File(dir, filename)
+
+        FileOutputStream(file).use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+
+        Log.i("Letterbox", "Imagen guardada en: ${file.absolutePath}")
     }
 }

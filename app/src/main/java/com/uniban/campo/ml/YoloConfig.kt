@@ -12,8 +12,13 @@ object YoloConfig {
      * Umbral de confianza. 0.15 prioriza recall (conteo de plantas);
      * baje a 0.10 si el logcat muestra maxScore entre 0.10 y 0.15.
      */
-    const val CONF_THRESHOLD = 0.15f
+    const val CONF_THRESHOLD = 0.30f
+
+    /** IoU del NMS; 0.30 = valor usado en las pruebas con Ultralytics en Python. */
     const val IOU_THRESHOLD = 0.30f
+
+    /** Máximo de detecciones conservadas tras el NMS (misma semántica que max_det=600 en Python). */
+    const val MAX_DET = 600
 
     /** Nombre del archivo del modelo dentro de assets/models/ o filesDir/models/. */
     const val MODEL_FILE_NAME = "model.tflite"

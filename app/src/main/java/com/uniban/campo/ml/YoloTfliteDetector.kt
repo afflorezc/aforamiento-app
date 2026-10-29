@@ -136,7 +136,9 @@ class YoloTfliteDetector private constructor(private val interpreter: Interprete
         )
 
         val kept = Nms.nms(candidates, YoloConfig.IOU_THRESHOLD)
-        Log.d(TAG, "Candidatos=${candidates.size}, tras NMS=${kept.size}")
+            .sortedByDescending { it.score }
+            .take(YoloConfig.MAX_DET)
+        Log.d(TAG, "Candidatos=${candidates.size}, tras NMS=${kept.size} (max_det=${YoloConfig.MAX_DET})")
         return kept
     }
 
@@ -168,12 +170,22 @@ class YoloTfliteDetector private constructor(private val interpreter: Interprete
      */
     private fun fillInput(bitmap: Bitmap) {
         val pixels = IntArray(inputSize * inputSize)
-        bitmap.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
+        bitmap.getPixels(
+            pixels, 0, inputSize,
+            0, 0, inputSize, inputSize
+        )
         inputBuffer.rewind()
-        for (p in pixels) {
-            inputBuffer.putFloat(Color.red(p) / 255f)
-            inputBuffer.putFloat(Color.green(p) / 255f)
-            inputBuffer.putFloat(Color.blue(p) / 255f)
+        // NCHW: primero todos los píxeles de R,
+        // después todos los de G y finalmente los de B.
+        for (c in 0 until 3) {
+            for (p in pixels) {
+                val value = when (c) {
+                    0 -> Color.red(p)
+                    1 -> Color.green(p)
+                    else -> Color.blue(p)
+                }
+                inputBuffer.putFloat(value / 255f)
+            }
         }
         inputBuffer.rewind()
     }
@@ -313,10 +325,20 @@ class YoloTfliteDetector private constructor(private val interpreter: Interprete
             if (inputType != DataType.FLOAT32) {
                 interpreter.close()
                 throw ModelNotAvailableException(
-                    "El modelo debe estar exportado en float32 (no cuantizado, sin int8). " +
-                        "Use: yolo export model=model.pt format=tflite imgsz=${YoloConfig.INPUT_SIZE}"
+                    "El modelo debe tener interfaz float32 (no cuantizado int8). " +
+                        "Si exportó con int8=True, vuelva a exportar sin int8. " +
+                        "Use: yolo export model=model.pt format=tflite imgsz=${YoloConfig.INPUT_SIZE} " +
+                        "(opcional half=True: pesos float16 con interfaz float32, válida para la app)"
                 )
             }
+
+            Log.i(
+                TAG,
+                "Exportación detectada: entrada=$inputType, " +
+                    "salida=${interpreter.getOutputTensor(0).dataType()}, " +
+                    "tamaño=${"%.1f".format(buffer.remaining() / (1024.0 * 1024.0))} MB " +
+                    "(float32 ≈ 4 B/peso; half=True ⇒ float16 ≈ 2 B/peso e igual interfaz)"
+            )
 
             try {
                 return YoloTfliteDetector(interpreter)

@@ -15,8 +15,18 @@ pip install ultralytics
 yolo export model=ruta/al/modelo.pt format=tflite imgsz=864
 ```
 
-Esto genera `modelo_saved_model/model.tflite` (float32). Copie el archivo como
+Esto genera `modelo_saved_model/model.tflite` con pesos **float32** e interfaz
+float32. Copie el archivo como
 `app/src/main/assets/models/model.tflite` y vuelva a compilar.
+
+Variantes de precisión:
+
+- `yolo export ... half=True`: pesos **float16** (~5.5 MB en vez de ~11 MB),
+  interfaz float32 (dequantiza en runtime); la app la acepta sin cambios.
+- `yolo export ... int8=True`: modelo cuantizado con interfaz int8; la app lo
+  rechaza a propósito (no usa runtime cuantizado).
+
+La app informa el tipo detectado en logcat: `Exportación detectada: entrada=…`.
 
 Alternativa sin recompilar (depuración): empuje el modelo al almacenamiento interno
 de la app en un dispositivo/emulador:

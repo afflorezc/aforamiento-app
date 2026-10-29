@@ -119,6 +119,8 @@ class PlantCounter(private val context: Context) {
                 }
                 report(onProgress, "Fusionando detecciones…", 0.82f)
                 finalDetections = Nms.mergeTileDetections(all)
+                    .sortedByDescending { it.score }
+                    .take(YoloConfig.MAX_DET)
                     .map { clamp(it, width, height) }
                     .filter { it.width > 1f && it.height > 1f }
                 Log.d(tag, "Tiles=${tiles.size}, detecciones crudas=${all.size}, tras merge=${finalDetections.size}")
@@ -126,11 +128,16 @@ class PlantCounter(private val context: Context) {
                 tilesUsed = 1
                 report(onProgress, "Detectando plantas…", 0.40f)
                 val (letterboxed, meta) = Letterbox.apply(bitmap)
+                Letterbox.saveBitmap(
+                    context,
+                    letterboxed,
+                    "android_letterbox.png"
+                )
                 val tileDets = det.detect(letterboxed)
                 letterboxed.recycle()
                 Log.d(
                     tag,
-                    "Detecciones del modelo=$tileDets.size; letterbox scale=${meta.scale} pad=(${meta.padX},${meta.padY})"
+                    "Detecciones del modelo=${tileDets.size}; letterbox scale=${meta.scale} pad=(${meta.padX},${meta.padY})"
                 )
                 report(onProgress, "Fusionando detecciones…", 0.70f)
                 val mapped = Nms.nms(tileDets, YoloConfig.IOU_THRESHOLD)
@@ -259,7 +266,7 @@ class PlantCounter(private val context: Context) {
         }
 
         for (d in detections) {
-            val color = if (d.classId == 0) Color.parseColor("#2E7D32") else Color.parseColor("#F9A825")
+            val color = if (d.classId == 0) Color.parseColor("#2E617D") else Color.parseColor("#3025F9")
             rectPaint.color = color
             bgPaint.color = color
 

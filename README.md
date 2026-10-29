@@ -62,6 +62,25 @@ tarjetas blancas con bordes `#D8E5D9`, esquinas de 12–16 dp y tipografía Outf
    yolo export model=modelo.pt format=tflite imgsz=864
    ```
 
+   La app corre la inferencia con la misma configuración validada en Python con
+   Ultralytics: `imgsz=864`, `iou=0.30`, `max_det=600`, dispositivo CPU
+   (4 hilos nativos), umbral de confianza 0.15 (`YoloConfig`).
+
+   **Precisión de la exportación (tipo de dato):**
+
+   | Comando | Tipo resultante | Tamaño (nano) | Estado en la app |
+   |---|---|---|---|
+   | `format=tflite imgsz=864` | pesos **float32** (interfaz float32) | ~11 MB | Soportado — recomendado |
+   | `... half=True` | pesos **float16**, interfaz float32 (dequantiza en runtime) | ~5.5 MB | Soportado — misma precisión práctica |
+   | `... int8=True` | pesos/activaciones **int8** (interfaz int8/uint8) | ~3 MB | Rechazado: requiere cuantización en la app |
+
+   En logcat, `YoloDetector` imprime al cargar:
+   `Exportación detectada: entrada=FLOAT32, salida=FLOAT32, tamaño=…` — eso indica
+   el tipo que entregó la exportación. **Recomendación móvil: mantener float32**
+   (el nano ya es ligero y es la máxima precisión); `half=True` es el alternativo
+   válido si se quiere reducir el APK/modelo a la mitad con impacto despreciable;
+   evite `int8=True` salvo validar mAP y extender el runtime de inferencia.
+
 3. Abra el proyecto en Android Studio y ejecute la configuración `app`.
 
 ## Notas de implementación
